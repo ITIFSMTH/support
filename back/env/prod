@@ -1,0 +1,1 @@
+DB_PATH = "host=localhost user=docker password=docker dbname=support sslmode=disable"

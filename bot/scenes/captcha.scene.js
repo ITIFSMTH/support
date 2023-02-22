@@ -1,0 +1,66 @@
+const { Scenes } = require('telegraf');
+const svgCaptcha = require('svg-captcha');
+const xmldom = require('xmldom');
+const sharp = require('sharp');
+const User = require('../model/User.model');
+const Bot = require('../model/Bot.model');
+
+const captchaScene = new Scenes.BaseScene('CAPTCHA_SCENE_ID');
+
+captchaScene.enter(async (ctx) => {
+    ctx.session.captcha = {};
+    const pngExpr = await generateCaptcha(ctx);
+
+    ctx.replyWithPhoto(
+        {"source": pngExpr},
+        {caption: ctx.i18n.t("captcha")}
+    );
+});
+
+captchaScene.on("message", async (ctx) => {
+    if (ctx.message.text === ctx.session.captcha.answer) {
+        return ctx.scene.leave()
+    }
+
+    const pngExpr = await generateCaptcha(ctx);
+    ctx.replyWithPhoto(
+        {"source": pngExpr},
+        {caption: ctx.i18n.t("captchaError")}
+    );
+});
+
+captchaScene.leave(async (ctx) => {
+    const greeting = await Bot.getGreeting()
+
+    ctx.reply(greeting)
+
+    if (!(await User.getUser(ctx.from.id))) {
+        await User.newUser({
+            id: ctx.from.id,
+            bot_api: ctx.telegram.token, 
+            username: `${ctx.from.first_name ? ctx.from.first_name : ""} ${ctx.from.last_name ? ctx.from.last_name : ""}`,
+            tg_link: ctx.from.username
+        })
+    }
+});
+
+const generateCaptcha = async (ctx) => {
+    const svgExpr = svgCaptcha.createMathExpr({
+        mathMin: 1,
+        mathMax: 9,
+        mathOperator: Math.random() > 0.5 ? "+" : "-",
+    })
+    ctx.session.captcha.answer = svgExpr.text;
+    
+    const captcha = new xmldom.DOMParser().parseFromString(svgExpr.data, 'text/xml');
+    const svg = captcha.getElementsByTagName('svg').item(0);
+    svg.setAttribute('width', '100em');
+    svg.setAttribute('height', '40em');
+    const img = await sharp(Buffer.from(
+        new xmldom.XMLSerializer().serializeToString(svg)
+    ));
+
+    return img.toBuffer()
+}
+
+module.exports = captchaScene

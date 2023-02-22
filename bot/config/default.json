@@ -1,0 +1,5 @@
+{
+    "URLs": {
+        "bot": "http://localhost:8081/api/bot"
+    }
+}
